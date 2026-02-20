@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>你是哪位电影女主角？</title>
+    <!-- 引入思源宋体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- 引入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --theme-gold: #F2BE5C;
+            --bg-dark: #070707;
+            --panel-bg: #111111;
+            --text-light: #e5e5e5;
+            --text-muted: #777777;
+        }
+
+        body {
+            font-family: 'Noto Serif SC', serif;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            background-image: radial-gradient(circle at 50% -20%, #1f1a10 0%, #070707 60%);
+            min-height: 100vh;
+        }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--theme-gold); }
+
+        .gold-text { color: var(--theme-gold); }
+        .gold-bg { background-color: var(--theme-gold); }
+
+        .fade-enter {
+            opacity: 0;
+            transform: translateY(15px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        .fade-enter.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .btn-option {
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            overflow: hidden;
+            background-color: var(--panel-bg);
+            border: 1px solid #222;
+        }
+        .btn-option:hover {
+            border-color: rgba(242, 190, 92, 0.5);
+            background-color: rgba(242, 190, 92, 0.05);
+            transform: translateX(8px);
+        }
+
+        .loader {
+            border: 1px solid rgba(242, 190, 92, 0.1);
+            border-top: 1px solid var(--theme-gold);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1.2s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .quote-marks::before { content: '“'; font-size: 3.5rem; color: var(--theme-gold); position: absolute; top: -25px; left: -25px; opacity: 0.2; font-family: sans-serif;}
+        .quote-marks::after { content: '”'; font-size: 3.5rem; color: var(--theme-gold); position: absolute; bottom: -45px; right: -20px; opacity: 0.2; font-family: sans-serif;}
+        
+        .hidden-section { display: none !important; }
+    </style>
+</head>
+<body class="antialiased selection:bg-[#F2BE5C] selection:text-black flex flex-col items-center justify-center min-h-screen">
+
+    <!-- 首页容器 -->
+    <div id="intro-screen" class="w-full max-w-3xl px-6 py-12 text-center fade-enter active">
+        <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold mb-8 leading-tight tracking-wide text-white">
+            五十种光影人生，<br>你是<span class="gold-text font-normal">哪位女主角</span>？
+        </h1>
+        <p class="text-base md:text-lg text-gray-400 mb-12 max-w-xl mx-auto leading-relaxed text-center">
+            通过回答25个问题，我会帮你匹配影史上最像你的那一位女主角。
+        </p>
+        <button onclick="startTest()" class="group relative px-10 py-4 border border-[#F2BE5C] text-[#F2BE5C] text-sm uppercase tracking-[0.2em] hover:bg-[#F2BE5C] hover:text-black transition-all duration-500 shadow-[0_0_15px_rgba(242,190,92,0.1)] hover:shadow-[0_0_25px_rgba(242,190,92,0.3)]">
+            开始测试
+        </button>
+    </div>
+
+    <!-- 答题容器 -->
+    <div id="quiz-screen" class="w-full max-w-3xl px-6 py-8 hidden-section">
+        <div class="mb-10">
+            <div class="flex justify-between items-end mb-4">
+                <span class="text-[10px] tracking-[0.3em] text-gray-500 uppercase">测试进度</span>
+                <span id="progress-text" class="gold-text text-lg font-light tracking-widest">01 / 25</span>
+            </div>
+            <div class="h-[2px] w-full bg-[#222] relative overflow-hidden">
+                <div id="progress-bar" class="absolute top-0 left-0 h-full gold-bg transition-all duration-500 ease-out shadow-[0_0_10px_#F2BE5C]" style="width: 4%;"></div>
+            </div>
+        </div>
+
+        <div id="question-container" class="fade-enter active">
+            <h2 id="question-text" class="text-xl md:text-2xl mb-8 leading-relaxed font-medium text-gray-100 min-h-[4rem]"></h2>
+            <div id="options-container" class="flex flex-col space-y-3">
+                <!-- 选项动态渲染 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载容器 -->
+    <div id="loading-screen" class="w-full max-w-md px-6 text-center hidden-section flex-col items-center justify-center min-h-[50vh]">
+        <div class="loader mb-8 mx-auto"></div>
+        <h3 class="text-lg tracking-widest text-white">正在匹配</h3>
+    </div>
+
+    <!-- 结果容器 -->
+    <div id="result-screen" class="w-full max-w-5xl px-6 py-12 md:py-20 hidden-section">
+        <p class="text-center text-xs tracking-[0.4em] text-gray-500 mb-4 uppercase">你的匹配结果</p>
+        <h1 id="res-name" class="text-center text-3xl md:text-5xl font-bold gold-text mb-3 tracking-wider"></h1>
+        <p id="res-movie" class="text-center text-base md:text-lg text-gray-400 italic mb-16 tracking-widest"></p>
+
+        <div class="flex flex-col lg:flex-row gap-12 lg:gap-16 items-start">
+            <!-- 左侧：雷达图与基础信息 -->
+            <div class="w-full lg:w-5/12 relative">
+                <div class="relative w-full aspect-square mb-8 bg-[#0a0a0a] rounded-full border border-[#222] p-4 shadow-[inset_0_0_30px_rgba(0,0,0,0.8)]">
+                    <canvas id="radarChart"></canvas>
+                </div>
+                
+                <div class="space-y-6 border-t border-[#333] pt-6">
+                    <div>
+                        <h4 class="text-[10px] tracking-[0.2em] text-gray-500 mb-2 uppercase">代表物品</h4>
+                        <p id="res-items" class="text-sm text-gray-300 leading-relaxed"></p>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <h4 class="text-[10px] tracking-[0.2em] text-gray-500 mb-2 uppercase">内心渴望</h4>
+                            <p id="res-likes" class="text-sm text-gray-300 leading-relaxed"></p>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-[10px] tracking-[0.2em] text-gray-500 mb-2 uppercase">内心抗拒</h4>
+                            <p id="res-dislikes" class="text-sm text-gray-400 leading-relaxed"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：深度解析与台词 -->
+            <div class="w-full lg:w-7/12 pt-2">
+                <div class="relative mb-12 pl-8 md:pl-10">
+                    <div class="absolute left-0 top-0 w-[1px] h-full gold-bg opacity-40"></div>
+                    <p id="res-quote" class="text-lg md:text-2xl italic text-gray-200 leading-relaxed relative quote-marks"></p>
+                </div>
+
+                <div class="space-y-6">
+                    <h3 class="text-xs tracking-[0.3em] gold-text uppercase border-b border-[#333] pb-3">深度解析</h3>
+                    <div id="res-analysis" class="text-gray-300 text-sm md:text-base leading-loose text-justify space-y-5">
+                        <!-- 解析文本 -->
+                    </div>
+                </div>
+
+                <div class="mt-16 text-right flex justify-between items-center border-t border-[#222] pt-6">
+                    <p class="text-xs text-gray-600 tracking-widest">灵魂契合度：<span id="res-match" class="gold-text"></span></p>
+                    <button onclick="location.reload()" class="text-xs tracking-[0.2em] text-gray-400 hover:text-[#F2BE5C] transition-colors uppercase">
+                        重新测试
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 定义五个心理维度
+        // R: Romance (浪漫/感性 - 注重情感、连接、美学)
+        // I: Independence (独立/自主 - 注重自我边界、不依赖)
+        // B: Rebellion (叛逆/打破 - 挑战规则、抗拒传统、破坏性)
+        // P: Pragmatism (务实/现实 - 结果导向、生存本能、理性计算)
+        // E: Idealism (理想/精神 - 追求远见、信仰、完美主义、精神世界)
+
+        // 25道题已完全口语化、场景化，去掉晦涩词汇。影响分值不变。
+        const questions = [
+            { q: "当生活突然发生巨大的变故，一切都充满未知时，你最真实的反应是：", opts: [
+                { text: "立刻盘点手头的存款和资源，做好最坏的打算。", impact: { P: 3, I: 1, E: -1, R: -1 } },
+                { text: "在脑海里给自己建一个避风港，靠发呆或幻想来躲避现实的焦虑。", impact: { E: 3, I: 2, P: -2, B: 0 } },
+                { text: "疯狂想找个懂自己的人倾诉，在别人的拥抱里找安全感。", impact: { R: 3, I: -2, P: 0, B: 0 } },
+                { text: "竟然有一丝隐秘的兴奋，觉得打破现在的无聊生活未必是件坏事。", impact: { B: 3, I: 1, P: 0, R: 1 } }
+            ]},
+            { q: "当你和身边的人爆发严重的矛盾时，你通常会怎么处理？", opts: [
+                { text: "算算这层关系还值不值得留，如果不划算，立刻冷酷拉黑。", impact: { P: 3, I: 2, R: -2, E: -1 } },
+                { text: "为了不让场面太难看，宁愿把委屈咽下去，表面上装作没事。", impact: { R: 2, I: -2, P: -1, B: -2 } },
+                { text: "绝对不退让，哪怕撕破脸大吵一架，也要把话说清楚。", impact: { B: 3, I: 1, R: 0, E: 1 } },
+                { text: "看看大家是不是三观不合，如果不合，一句话不说默默疏远。", impact: { E: 3, I: 1, P: -1, B: 0 } }
+            ]},
+            { q: "如果非要给“命运”下一个定义，你心里更认同哪一句？", opts: [
+                { text: "命运早就写好了剧本，我只能在被安排好的生活里找点小浪漫。", impact: { R: 2, E: 2, B: -2, I: -1 } },
+                { text: "根本没有命运这回事，过得好不好全凭我自己的本事和决定。", impact: { P: 3, I: 2, E: -2, R: -1 } },
+                { text: "如果命运让我低头，我偏要逆天改命，绝不顺从。", impact: { B: 3, I: 2, P: 0, R: 1 } },
+                { text: "冥冥中自有天意，我相信宇宙会把我推向我该去的地方。", impact: { E: 3, R: 1, P: -1, B: -1 } }
+            ]},
+            { q: "遇到一个没有任何安排和打扰的长假，你最可能怎么度过？", opts: [
+                { text: "关掉手机不见任何人，一个人宅在家里沉浸在自己的爱好中。", impact: { I: 3, E: 2, R: -1, P: 0 } },
+                { text: "还是会给自己列个计划，学点东西或者做点有用的事，不想虚度。", impact: { P: 3, I: 1, B: -2, R: -1 } },
+                { text: "彻底放飞自我，去干平时根本不敢做或者没空做的疯事。", impact: { B: 3, R: 1, P: -2, E: 0 } },
+                { text: "特别想谈场恋爱，或者来一场说走就走的浪漫旅行。", impact: { R: 3, E: 1, P: -2, I: -1 } }
+            ]},
+            { q: "在职场或生活中遇到极度不公平的“潜规则”时，你会怎么做？", opts: [
+                { text: "表面上乖乖听话，背地里却钻规则的空子为自己捞好处。", impact: { P: 3, B: 1, E: -2, R: 0 } },
+                { text: "心里很鄙视，但不想惹麻烦，尽量躲得远远的管好自己就行。", impact: { I: 2, E: 2, P: -1, B: 0 } },
+                { text: "咽不下这口气，哪怕得罪所有人，也要站出来把桌子掀了。", impact: { B: 3, E: 2, P: -2, R: 1 } },
+                { text: "觉得很委屈又无可奈何，只能找几个好朋友大吐苦水。", impact: { R: 2, I: -2, B: -1, P: 0 } }
+            ]},
+            { q: "面对一段“什么都好，就是没有心动感觉”的感情，你怎么看？", opts: [
+                { text: "挺好的，过日子就是要安稳，虚无缥缈的激情又不能当饭吃。", impact: { P: 3, I: 1, R: -2, B: -2 } },
+                { text: "绝对受不了。没有爱和激情的安稳生活，简直像是在坐牢。", impact: { B: 3, R: 2, P: -3, I: 0 } },
+                { text: "现实里可以搭伙过日子，但我的心里永远会留一个只属于我自己的角落。", impact: { I: 2, E: 2, R: 1, P: 0 } },
+                { text: "我会想尽办法制造惊喜，努力把死水一潭的生活重新烧出火花。", impact: { R: 3, E: 1, I: -1, B: 0 } }
+            ]},
+            { q: "你平时是怎么看待“撒谎”这件事的？", opts: [
+                { text: "只要是为了保护我爱的人，哪怕撒弥天大谎我也是愿意的。", impact: { R: 3, E: 1, P: 0, I: -1 } },
+                { text: "撒谎只是解决问题的一种手段，只要管用，没什么大不了的。", impact: { P: 3, I: 1, E: -2, R: -1 } },
+                { text: "极其讨厌别人骗我。我宁愿听残酷的真话，也不要虚伪的假话。", impact: { I: 3, B: 2, P: -1, R: 0 } },
+                { text: "有时候谎言就像童话，能让这个糟糕的世界稍微变得美好一点。", impact: { E: 3, R: 2, P: -2, I: -1 } }
+            ]},
+            { q: "经历了一次惨痛的失恋或失败后，你会怎么让自己走出来？", opts: [
+                { text: "强行把眼泪憋回去，冷静分析到底亏了多少，赶紧准备下一步计划。", impact: { P: 3, I: 2, R: -2, E: -1 } },
+                { text: "剪个头发或者扔掉一堆旧东西，用一种决绝的方式宣告从头开始。", impact: { B: 3, R: 1, P: -1, I: 1 } },
+                { text: "把自己关在房间里，谁也不见，连安慰都不听，自己一个人慢慢熬。", impact: { I: 3, B: 1, R: -1, P: 0 } },
+                { text: "一遍遍回想过去的细节，甚至觉得这种心碎的感觉也能带来艺术灵感。", impact: { E: 3, R: 2, P: -2, I: 0 } }
+            ]},
+            { q: "你觉得周围不熟的人，最容易对你产生哪种误解？", opts: [
+                { text: "觉得我太现实、太有心机，根本不懂我只是为了生存才这么拼。", impact: { P: 3, I: 1, R: -2, E: -1 } },
+                { text: "觉得我孤僻、高冷不好惹，其实我只是嫌无效社交太累了。", impact: { I: 3, E: 1, R: -1, B: 0 } },
+                { text: "觉得我脾气冲、像个刺头，其实我只是看不惯他们的虚伪。", impact: { B: 3, I: 1, P: -1, R: 0 } },
+                { text: "觉得我傻白甜、不切实际，其实他们根本不懂我内心的坚持。", impact: { E: 3, R: 2, P: -2, B: -1 } }
+            ]},
+            { q: "如果把你的人生拍成电影，你觉得画面会是什么色调的？", opts: [
+                { text: "高级冷酷的黑白灰，干净利落，没有一丁点多余的废话。", impact: { I: 2, P: 2, R: -2, E: 0 } },
+                { text: "极具视觉冲击力的红与黑，充满了刺激、暴力和不安分的感觉。", impact: { B: 3, R: 1, P: -1, E: 0 } },
+                { text: "像老胶片一样泛着暖黄色的光，温柔、怀旧又带点浪漫。", impact: { R: 3, E: 2, P: -2, I: -1 } },
+                { text: "深邃神秘的星空蓝，带着一种好像不属于这个凡俗世界的空灵。", impact: { E: 3, I: 1, P: -1, R: 0 } }
+            ]},
+            { q: "面对那些总是喜欢对你指手画脚、替你做决定的人，你会怎么应对？", opts: [
+                { text: "嘴上说“好的”，实际上该怎么做还怎么做，甚至反过来利用他们。", impact: { P: 3, B: 1, E: -1, R: 0 } },
+                { text: "瞬间炸毛，像被踩了尾巴的猫一样，用最激烈的方式怼回去。", impact: { B: 3, I: 2, P: -1, R: 0 } },
+                { text: "翻个白眼一句话不说，直接从他们的世界里消失，划清界限。", impact: { I: 3, P: 1, R: -1, B: 0 } },
+                { text: "如果对方是打着“为我好”的旗号，我会觉得很有压力，最后多半会委屈自己。", impact: { R: 3, I: -3, P: 0, E: 1 } }
+            ]},
+            { q: "说心里话，你觉得“钱”对你来说到底意味着什么？", opts: [
+                { text: "钱是我活在这个世界上最大的底气，没钱连呼吸都不踏实。", impact: { P: 3, I: 1, E: -2, R: -1 } },
+                { text: "钱是用来买自由的，只要钱够多，我就能对讨厌的人说“滚”。", impact: { I: 2, B: 2, P: 1, R: -1 } },
+                { text: "整天谈钱只会让人变得市侩，我讨厌钱破坏了生活里的纯粹。", impact: { E: 3, R: 2, P: -3, I: 0 } },
+                { text: "钱就是个工具，用来买好吃的好玩的，支持我去享受浪漫人生罢了。", impact: { R: 2, B: 1, P: -1, E: 1 } }
+            ]},
+            { q: "当你感到十分孤独的时候，你内心最真实的感受是：", opts: [
+                { text: "厉害的人都是孤独的，我不需要别人懂，越孤独我脑子越清醒。", impact: { I: 3, P: 1, R: -2, E: 0 } },
+                { text: "孤独真的太冷了，我每天都在盼着有一个人能紧紧抱住我。", impact: { R: 3, I: -2, P: 0, B: 0 } },
+                { text: "孤独是我的安全区，只要没人来烦我，我就觉得特别舒服。", impact: { E: 2, I: 2, B: 1, P: -1 } },
+                { text: "虽然一个人有时候挺难熬，但这是我为了自由必须付出的代价。", impact: { B: 3, I: 1, R: 1, P: 0 } }
+            ]},
+            { q: "深夜失眠的时候，你脑子里最容易冒出什么想法？", opts: [
+                { text: "疯狂焦虑明天的房租或者工作，盘算着接下来的赚钱计划。", impact: { P: 3, I: 1, E: -1, R: -1 } },
+                { text: "回忆以前谈过的恋爱，或者幻想未来能遇到一个绝美的爱人。", impact: { R: 3, E: 1, P: -2, I: -1 } },
+                { text: "思考人生到底有什么意义，甚至脑洞大开想到了宇宙的尽头。", impact: { E: 3, I: 2, P: -2, R: 0 } },
+                { text: "越想白天受的委屈越气，恨不得现在爬起来去把那个人揍一顿。", impact: { B: 3, R: 1, P: -1, I: 0 } }
+            ]},
+            { q: "如果非要把“精神世界”和“肉体感受”分开，你更看重哪个？", opts: [
+                { text: "身体就是个工具，只要能帮我达到目的，累垮了也没关系。", impact: { I: 2, P: 2, B: 1, R: -2 } },
+                { text: "肉体的拥抱和亲吻才是最真实的，摸不到的爱都是在画大饼。", impact: { R: 3, E: -1, I: -1, P: 0 } },
+                { text: "精神上的共鸣才是最高级的，我向往那种纯洁无瑕的灵魂伴侣。", impact: { E: 3, P: -2, B: -1, R: 1 } },
+                { text: "我的身体我做主，我想穿什么、怎么打扮，都是在向这个世界宣战。", impact: { B: 3, I: 1, P: 0, E: 1 } }
+            ]},
+            { q: "你梦想中完美的“家”应该是什么样子的？", opts: [
+                { text: "家里什么都有，不愁吃穿，最重要的是，在这个家里我说了算。", impact: { P: 3, I: 1, R: -1, E: -1 } },
+                { text: "房子大小无所谓，只要跟我最爱的人在一起，哪里都是家。", impact: { R: 3, I: -2, P: -2, E: 1 } },
+                { text: "一个谁都找不到我的秘密基地，门一锁，里面全是我的宝贝。", impact: { I: 3, E: 1, B: 1, R: -1 } },
+                { text: "根本不想买房被套牢，世界这么大，一直流浪一直爽。", impact: { B: 3, I: 2, P: -1, R: -1 } }
+            ]},
+            { q: "如果能白送你一个超能力，你最想要哪一个？", opts: [
+                { text: "“读心术”和“预知未来”，这样我就能看透别人的底牌，永远不会输。", impact: { P: 3, I: 1, E: -1, R: -1 } },
+                { text: "“力大无穷”的破坏力，看谁不爽或者看什么规矩不顺眼，直接锤爆。", impact: { B: 3, I: 1, P: -1, E: 0 } },
+                { text: "“钻进别人梦里”的能力，去安抚和治愈那些心里受过伤的人。", impact: { R: 2, E: 2, P: -2, I: -1 } },
+                { text: "“瞬间移动”甚至灵魂出窍，去看看宇宙黑洞到底长什么样。", impact: { E: 3, I: 2, R: -1, P: -1 } }
+            ]},
+            { q: "如果遇到极其凶恶的坏人，而你又明显打不过，你的第一反应是：", opts: [
+                { text: "吓得腿软，但如果坏人要伤害我的家人朋友，我会拼命挡在前面。", impact: { R: 3, E: 1, I: -1, P: 0 } },
+                { text: "表面装孙子，眼睛却死死盯着他，脑子里疯狂计算他哪里有破绽。", impact: { P: 2, I: 2, B: 1, R: -2 } },
+                { text: "管他打不打得过，老子就是死也要咬下他一块肉来！", impact: { B: 3, R: 1, P: -2, I: 0 } },
+                { text: "在心里默默祈祷，相信老天有眼，恶人迟早会有恶报。", impact: { E: 3, I: 1, B: -1, P: -1 } }
+            ]},
+            { q: "有人说“为了大多数人的利益，牺牲少数人是值得的”，你怎么看？", opts: [
+                { text: "虽然听起来很残酷，但理智地想，现实世界只能这么做。", impact: { P: 3, I: 1, R: -3, E: -1 } },
+                { text: "绝对不行！每个人的命都是命，凭什么拿别人的命去换所谓的大局？", impact: { E: 3, R: 2, P: -2, B: 1 } },
+                { text: "说这话的人就是想搞独裁，必须要把这种吃人的烂规矩彻底推翻！", impact: { B: 3, I: 1, P: -1, R: 0 } },
+                { text: "我不关心什么大局，我只在乎被牺牲的那个是不是我在乎的人。", impact: { I: 2, R: 1, E: -2, B: 0 } }
+            ]},
+            { q: "你平时是怎么对待“秘密”的？", opts: [
+                { text: "知道别人的秘密是个好东西，关键时刻可以拿来当保命的把柄。", impact: { P: 3, I: 1, R: -1, E: -1 } },
+                { text: "我心里藏了无数个连最好的朋友都没说过的秘密，我就喜欢一个人憋着。", impact: { E: 2, I: 2, R: 1, P: -1 } },
+                { text: "特别希望能遇到一个完全信任的人，然后把我的秘密一股脑全倒给他。", impact: { R: 3, I: -2, P: -1, B: 0 } },
+                { text: "讨厌搞小圈子藏秘密，有什么事不能光明正大摆在台面上说？", impact: { B: 3, P: -1, I: 1, R: 0 } }
+            ]},
+            { q: "逛博物馆看到一幅名画时，你最先注意到或者最打动你的是：", opts: [
+                { text: "画里那种超脱世俗、仿佛能净化灵魂的神圣感。", impact: { E: 3, I: 1, P: -2, R: 1 } },
+                { text: "画家当时到底经历了多大的情伤，才能画出这么让人心碎的作品。", impact: { R: 3, E: 1, I: -1, P: -2 } },
+                { text: "这画风太狂野、太离经叛道了，完全不按套路出牌，酷毙了！", impact: { B: 3, I: 1, R: 0, P: -1 } },
+                { text: "这画功也太牛了，更牛的是，它现在拍卖肯定值几个亿吧？", impact: { P: 3, I: 1, E: -2, R: -1 } }
+            ]},
+            { q: "如果有一种药吃了能删掉一段记忆，你最想忘掉什么？", opts: [
+                { text: "那些因为脑子进水被别人骗走钱、或者耽误了事业的愚蠢往事。", impact: { P: 3, I: 1, R: -1, E: -1 } },
+                { text: "那些被生活逼得没办法，不得不低三下四求人的丢脸瞬间。", impact: { B: 2, I: 2, P: -1, R: 0 } },
+                { text: "失恋或者亲人离开时那种痛不欲生的感觉，真的不想再痛一次了。", impact: { R: 3, I: -1, E: 1, P: 0 } },
+                { text: "绝对不删。哪怕是吃过的苦，那也是我人生独特的勋章。", impact: { I: 2, E: 2, P: 0, B: 1 } }
+            ]},
+            { q: "你平时是怎么看待社会上的各种“规矩”和“老传统”的？", opts: [
+                { text: "规矩就是用来管普通人的，只要我爬得够高，我就是制定规矩的人。", impact: { P: 3, I: 2, E: -1, R: -1 } },
+                { text: "很多老规矩简直就是封建糟粕，我巴不得把它们全砸碎了。", impact: { B: 3, I: 1, P: -1, R: 1 } },
+                { text: "规矩挺烦人的，但我懒得去吵架，只要别管到我头上爱咋咋地。", impact: { I: 2, E: 2, B: 1, P: 0 } },
+                { text: "有些老传统其实挺有人情味的，像过年一家人聚在一起的感觉就很好。", impact: { R: 2, E: 1, B: -2, I: -1 } }
+            ]},
+            { q: "当你要做一个影响一生的重大决定时，最后让你拍板的原因是：", opts: [
+                { text: "强烈的第六感，就是觉得选这个心里最踏实，我相信冥冥中的缘分。", impact: { E: 3, R: 1, P: -2, I: 0 } },
+                { text: "拿着计算器算了半天，发现选这条路风险最小、赚得最多。", impact: { P: 3, I: 1, R: -2, E: -1 } },
+                { text: "哪条路能让我一个人说了算、不用看别人脸色，我就走哪条路。", impact: { I: 3, B: 1, R: -2, P: 0 } },
+                { text: "大家都劝我别走的路？有点意思，我就偏要走走看能怎样！", impact: { B: 3, I: 1, P: -1, R: 0 } }
+            ]},
+            { q: "闭上眼睛想象一下，如果你的灵魂长成一个具体的东西，它最像什么？", opts: [
+                { text: "一把极其锋利的冰冷匕首，没有感情，但绝对致命。", impact: { P: 2, I: 3, R: -2, B: 1 } },
+                { text: "一团疯狂燃烧的野火，谁敢限制我我就烧掉谁。", impact: { B: 3, R: 2, P: -2, I: 0 } },
+                { text: "深海里一只透明的发光水母，脆弱、孤独，但很美。", impact: { E: 3, I: 2, P: -1, R: 1 } },
+                { text: "一根死死缠着大树的藤蔓，为了得到温暖甚至可以连命都不要。", impact: { R: 3, I: -3, P: 0, B: -1 } }
+            ]}
+        ];
+
+        // 50个经典角色的灵魂坐标库 (R:浪漫, I:独立, B:叛逆, P:务实, E:理想)
+        // 坐标满分理论值为100，相对大小决定了匹配结果。
+        const characters = [
+            { n: "斯嘉丽 · 奥哈拉", m: "《乱世佳人》", q: "Tomorrow is another day.", t: { R:40, I:85, B:60, P:100, E:10 }, sym:"红土/天鹅绒裙", l:"掌控权/土地", d:"贫穷/软弱", a:"你拥有野草般的生命力。极度务实的本能让你在绝境中从不内耗，世俗眼光无法束缚你。你用利己的坚硬铠甲保护自己，是一朵废墟上不可战胜的带刺玫瑰。" },
+            { n: "霍莉 · 戈莱特丽", m: "《蒂凡尼的早餐》", q: "我们不属于任何人，也没有人属于我们。", t: { R:60, I:70, B:50, P:40, E:50 }, sym:"小黑裙/猫", l:"自由/橱窗购物", d:"承诺/被束缚", a:"你极度渴望安全感，却又比任何人都害怕失去自由。你像警惕的猫，用光鲜和漫不经心掩饰内心的怯懦。你逃避深刻的情感连接，灵魂始终在流浪。" },
+            { n: "艾米丽 · 普兰", m: "《天使爱美丽》", q: "做梦的人现在日子不好过。", t: { R:85, I:60, B:20, P:10, E:100 }, sym:"照相亭/布丁", l:"暗中行善/幻想", d:"正面冲突/现实", a:"你有着极其丰富细腻的内心世界。在现实中你可能显得内向笨拙，但脑海中却上演着交响乐。你用古灵精怪的诗意温暖他人，却唯独害怕直面自己的幸福。" },
+            { n: "罗丝 · 迪威特", m: "《泰坦尼克号》", q: "To make each day count.", t: { R:100, I:80, B:95, P:10, E:85 }, sym:"海洋之心/素描", l:"纯粹激情/冒险", d:"阶级虚伪/妥协", a:"你的骨子里流淌着叛逆的血液。你痛恨被世俗规训定义，拒绝做精致的陈列品。你对爱情和自由有着狂热的追求，敢于为了极致体验粉碎一切既定安逸。" },
+            { n: "玛蒂尔达", m: "《这个杀手不太冷》", q: "人生总是这么苦，还是只有童年如此？", t: { R:70, I:40, B:80, P:60, E:30 }, sym:"盆栽/Choker", l:"被保护/忠诚", d:"被抛弃/虚伪", a:"你有着超越年龄的冷酷伪装。世界过早展示了残忍，让你学会用带刺的外壳武装自己。但在内心深处，你极度渴望被爱，一旦确认安全，便会献出近乎病态的忠诚。" },
+            
+            // 极高独立与务实 (冷酷/理性)
+            { n: "安迪 · 萨克斯", m: "《穿普拉达的女王》", q: "当你的私人生活化为乌有，那就是你要晋升的时候了。", t: { R:20, I:80, B:30, P:95, E:40 }, sym:"高跟鞋/日程表", l:"自我证明/效率", d:"停滞/被轻视", a:"你拥有极强的适应力和目标感。哪怕一开始格格不入，你也能迅速洞悉规则并反客为主。理性是你披荆斩棘的利刃。" },
+            { n: "艾米 · 邓恩", m: "《消失的爱人》", q: "我们互相控制，互相伤害，这就是婚姻。", t: { R:30, I:90, B:60, P:100, E:10 }, sym:"日记本/寻宝线索", l:"绝对掌控/完美人设", d:"背叛/失去控制", a:"你的智商与手腕令人战栗。你绝不允许自己成为受害者，当规则对你不利，你会用最冷酷、最缜密的方式将其重新书写。" },
+            { n: "克拉丽丝 · 史达琳", m: "《沉默的羔羊》", q: "羔羊停止尖叫了吗？", t: { R:10, I:95, B:40, P:85, E:70 }, sym:"FBI徽章/黑暗", l:"真相/直面恐惧", d:"男权凝视/无知", a:"你是一个在黑暗中逆行的斗士。凭借极高的智力与不屈的独立人格，你敢于直视深渊。你的冷静甚至能让恶魔感到敬畏。" },
+            { n: "草薙素子", m: "《攻壳机动队》", q: "网络是广阔无垠的。", t: { R:10, I:100, B:40, P:80, E:80 }, sym:"义体/数据线", l:"哲学思辨/边界突破", d:"被定义/肉体束缚", a:"你的灵魂高度剥离了肉体的庸俗。你极端独立，像一把冰冷锋利的手术刀，剖析着生命与存在的终极意义，追求更高维度的超脱。" },
+            
+            // 极高叛逆与独立 (破坏者/斗士)
+            { n: "芙莉欧莎", m: "《疯狂的麦克斯4》", q: "Out here, everything hurts.", t: { R:10, I:95, B:100, P:80, E:40 }, sym:"机械臂/战车", l:"救赎/挣脱锁链", d:"独裁压迫/绝望", a:"你是废土上的战神。骨子里的叛逆让你无法忍受暴政，哪怕希望渺茫也要用血肉之躯撞开一条血路，你拥有毁灭旧世界的力量。" },
+            { n: "崔妮蒂", m: "《黑客帝国》", q: "躲闪子弹？当你准备好的时候，你就不需要了。", t: { R:50, I:90, B:95, P:60, E:70 }, sym:"墨镜/代码", l:"真实/觉醒", d:"矩阵的虚幻/盲从", a:"你不屑于生活在安逸的谎言中。一旦你认清了世界的虚伪，便会化身为最冷酷的破坏者，为自由与真实的信仰战至最后一刻。" },
+            { n: "莎兰德", m: "《龙纹身的女孩》", q: "我不需要任何人的许可。", t: { R:10, I:100, B:95, P:70, E:20 }, sym:"纹身/黑客电脑", l:"绝对隐秘/复仇", d:"父权压迫/制度", a:"你是一个浑身带刺、拒绝社会化的独行侠。你对世俗规则充满蔑视，用极高的智商和以暴制暴的手段，冷酷地清理着那些伪善的恶徒。" },
+            { n: "艾薇 · 哈蒙德", m: "《V字仇杀队》", q: "艺术家用谎言揭露真相，政治家用谎言掩盖真相。", t: { R:30, I:70, B:100, P:40, E:80 }, sym:"面具/剃发", l:"觉醒的自由/不屈", d:"极权恐惧/遗忘", a:"你经历了从软弱到重生的涅槃。当恐惧被彻底剔除，你展现出惊人的反叛意志。你不仅是反抗的火种，更是推翻腐朽的高阶信仰。" },
+            { n: "路易丝", m: "《末路狂花》", q: "你必须拿回你被夺走的东西。", t: { R:40, I:85, B:95, P:50, E:30 }, sym:"雷鸟敞篷车/左轮", l:"无尽的公路/掌控", d:"忍气吞声/回头", a:"退无可退时，你选择将油门踩到底。你用极端的方式对抗命运的不公，哪怕前方是悬崖，也胜过在屈辱的牢笼中苟活。" },
+            
+            // 极高浪漫与理想 (诗意/共情)
+            { n: "伊尔莎 · 伦德", m: "《卡萨布兰卡》", q: "Play it, Sam. Play 'As Time Goes By'.", t: { R:95, I:40, B:30, P:40, E:80 }, sym:"风衣/钢琴曲", l:"牺牲的爱/回忆", d:"背叛信仰/冷酷", a:"你将爱与信仰视作生命最高的意义。在乱世的漩涡中，你的情感细腻且深沉。你甚至愿意为了更高尚的理想，埋葬自己最刻骨的爱情。" },
+            { n: "简 · 爱", m: "《简·爱》", q: "你以为我贫穷、相貌平平就没有感情吗？", t: { R:85, I:80, B:60, P:30, E:85 }, sym:"荒原/书本", l:"精神平等/灵魂伴侣", d:"阶级傲慢/施舍", a:"你外表安静，内心却燃烧着炽热的火焰。你对人格独立和精神平等有着不容亵渎的坚持。哪怕一无所有，你也绝不在爱情中出卖尊严。" },
+            { n: "赛琳娜", m: "《爱在黎明破晓前》", q: "如果世上有魔法，它一定存在于理解彼此的努力中。", t: { R:90, I:60, B:40, P:20, E:95 }, sym:"火车票/维也纳街头", l:"深层对话/灵魂共振", d:"肤浅/按部就班", a:"你是一个极度浪漫的理想主义者，用语言和思考丈量世界。你渴望那种能触及灵魂深处的交流，将瞬间的相遇化作永恒的诗意。" },
+            { n: "米娅", m: "《爱乐之城》", q: "Here's to the fools who dream.", t: { R:90, I:50, B:30, P:20, E:90 }, sym:"爵士乐/试镜剧本", l:"追梦/纯粹的热爱", d:"妥协放弃/现实倾轧", a:"你是一个为了梦想可以不顾一切的“傻瓜”。你内心的光芒源自对艺术和爱情最纯粹的憧憬，哪怕在洛杉矶的星空下摔得遍体鳞伤，依然闪耀。" },
+            { n: "伊丽莎白 · 班内特", m: "《傲慢与偏见》", q: "除非你是我生命中不可或缺的，否则我绝不结婚。", t: { R:80, I:85, B:50, P:40, E:60 }, sym:"泥泞的裙摆/信件", l:"真诚/思想交锋", d:"门第观念/愚蠢", a:"你机智、锐利，从不轻易被表象迷惑。你坚持爱情必须建立在相互尊重与灵魂契合之上，绝不向世俗的利益联姻低头。" },
+            
+            // 极高浪漫与叛逆 (激情燃烧者)
+            { n: "薇薇安", m: "《风月俏佳人》", q: "我要的是童话。", t: { R:95, I:50, B:80, P:20, E:40 }, sym:"大红裙/耳机", l:"被当做珍宝/打破偏见", d:"虚伪上流/被轻贱", a:"你有着原生态的生命力和大胆的反叛精神。你拒绝被环境同化，坚持用自己独特而热烈的方式去爱，最终硬生生把现实扭转成了童话。" },
+            { n: "玛莲娜", m: "《西西里的美丽传说》", q: "(无声的凝视)", t: { R:70, I:20, B:50, P:10, E:30 }, sym:"短发/被点燃的香烟", l:"尊严/宁静", d:"流言蜚语/人性之恶", a:"你的存在本身就是对庸俗世界的冲击。你被迫承受着人性的嫉妒与狂热，在沉默中散发着惊心动魄的悲剧美学。" },
+            { n: "千寻", m: "《千与千寻》", q: "曾经发生过的事请不可能忘记，只是想不起来而已。", t: { R:60, I:70, B:40, P:50, E:80 }, sym:"车票/河水", l:"本心/救赎", d:"贪婪/迷失自我", a:"你在充满诱惑与规则的异世界中，展现出惊人的纯粹与韧性。你不被贪婪腐蚀，始终铭记自己的名字和来路，是一种温柔而坚定的反抗。" },
+            { n: "苏丽珍", m: "《花样年华》", q: "如果多一张船票，你会不会跟我走？", t: { R:90, I:30, B:10, P:40, E:60 }, sym:"旗袍/昏黄路灯", l:"隐秘的情愫/体面", d:"道德逾越/失控", a:"你将澎湃的激情压抑在精致的旗袍之下。你的浪漫带着一种隐忍的东方美学，在理智与情感的夹缝中，留下最绵长的叹息。" },
+            
+            // 极高理想与独立 (先知/探索者)
+            { n: "露伊丝 · 班克斯", m: "《降临》", q: "尽管知道这段旅程的终点，我依然选择拥抱它。", t: { R:50, I:80, B:10, P:60, E:100 }, sym:"水墨文字/外星飞船", l:"终极真理/包容", d:"线性时间/好战的无知", a:"你的灵魂触碰到了四维的边界。你以惊人的智慧和悲悯，接纳了生命中所有的痛苦与喜悦。在宿命面前，你的选择是一种最高阶的自由。" },
+            { n: "墨菲 · 库珀", m: "《星际穿越》", q: "不要温和地走进那个良夜。", t: { R:40, I:90, B:30, P:80, E:90 }, sym:"手表/引力方程", l:"科学/跨越时空的爱", d:"绝望/放弃", a:"你拥有极其理性的头脑和无比执着的信仰。你深知爱是唯一能够超越时间与空间维度的力量，并以此为锚点，完成了拯救人类的奇迹。" },
+            { n: "艾丽丝", m: "《生化危机》", q: "My name is Alice. And this is my world.", t: { R:10, I:100, B:80, P:80, E:30 }, sym:"双枪/保护伞标志", l:"生存/消灭邪恶", d:"被实验/丧尸法则", a:"你是一个纯粹的战斗机器和生存专家。你摒弃了不必要的情感，用极致的武力和绝对的自主性，在废土中杀出一条血路。" },
+            { n: "戴安娜 · 普林斯", m: "《神奇女侠》", q: "这无关值得与否，而是关于你相信什么。", t: { R:60, I:85, B:50, P:40, E:100 }, sym:"真言套索/神剑", l:"和平/人类的善意", d:"战争阴谋/谎言", a:"你是一位充满神性的理想主义战士。即使见证了人性的黑暗，你依然选择用纯粹的爱与力量去守护。你的信仰如同耀眼的阳光般不可直视。" },
+            
+            // 其他经典补充配置
+            { n: "娜塔莎 · 罗曼诺夫", m: "《黑寡妇》", q: "我曾经一无所有，后来我有了这个家。", t: { R:30, I:80, B:40, P:90, E:50 }, sym:"沙漏红印/格斗刺", l:"赎罪/守护家人", d:"被控制/红房子", a:"冷酷的特工面具下，藏着一颗极其渴望归属的心。你极其务实致命，却愿意为了弥补过去的账本，做出最无私的牺牲。" },
+            { n: "安妮公主", m: "《罗马假日》", q: "罗马，当然是罗马。", t: { R:85, I:30, B:60, P:20, E:70 }, sym:"冰淇淋/剪短的头发", l:"短暂的自由/纯真", d:"皇室规矩/死板", a:"你背负着沉重的责任，却又向往普通人的市井浪漫。你的叛逆是温和而哀伤的，那一天的罗马，是你用一生去怀念的自由之梦。" },
+            { n: "乔 · 马奇", m: "《小妇人》", q: "女人有思想，有灵魂，也有心灵。", t: { R:60, I:90, B:70, P:40, E:80 }, sym:"墨水/阁楼", l:"文学创作/独立生存", d:"婚姻交易/女性桎梏", a:"你像一阵充满活力的风，毫不掩饰你的野心。你拒绝女性必须通过婚姻来实现价值的陈词滥调，坚持用手中的笔为自己打下一片江山。" },
+            { n: "凯特尼斯", m: "《饥饿游戏》", q: "如果我们要燃烧，你们要和我们一起化为灰烬。", t: { R:20, I:95, B:90, P:85, E:30 }, sym:"嘲笑鸟胸针/弓箭", l:"保护妹妹/生存", d:"权力游戏/被当做棋子", a:"你并非天生的革命者，而是被残酷现实逼出的斗士。你极度务实冷峻，但你内心的那一抹不屈，最终点燃了燎原的烈火。" },
+            { n: "妮娜", m: "《黑天鹅》", q: "I felt it. Perfect. It was perfect.", t: { R:20, I:30, B:50, P:40, E:100 }, sym:"芭蕾舞鞋/镜子碎裂", l:"绝对完美/舞台", d:"平庸/母亲的控制", a:"你对完美的追求达到了病态与疯狂的边缘。你内心的黑天鹅为了挣脱精神枷锁，不惜毁灭肉体，在艺术的极致中完成了血淋淋的蜕变。" },
+            { n: "露西", m: "《超体》", q: "I am everywhere.", t: { R:0, I:100, B:10, P:50, E:100 }, sym:"蓝色结晶/U盘", l:"全知全能/知识传递", d:"人类的低效/感官局限", a:"当大脑开发至极限，你剥离了所有人类情感。你化身为绝对理性和终极真理的容器，你的存在已经超越了世俗的理解维度。" },
+            { n: "莎莫", m: "《恋夏500天》", q: "我不想属于任何人。", t: { R:40, I:85, B:50, P:60, E:30 }, sym:"史密斯飞船唱片/建筑画", l:"自由体验/不被定义", d:"标签/沉重的承诺", a:"你像夏天的风一样不可捉摸。你极其清楚自己想要什么，拒绝被别人单方面的浪漫幻想所绑架。你是独立的个体，绝非他人的爱情客体。" },
+            { n: "瑞秋", m: "《银翼杀手》", q: "你有没有用那个测试过你自己？", t: { R:60, I:40, B:30, P:20, E:80 }, sym:"复古卷发/折纸", l:"虚构的记忆/渴望为人", d:"被销毁/身份危机", a:"你带着冰冷的高科技外壳，却孕育出了最动人的灵魂。你在记忆的废墟中寻找自我存在的证明，悲凉且充满诗意。" },
+            { n: "贝拉", m: "《暮光之城》", q: "I know what I want.", t: { R:95, I:30, B:70, P:10, E:50 }, sym:"苹果/雨天", l:"极致的爱恋/永生", d:"平凡的人类生活/别离", a:"你对爱情有着飞蛾扑火般的偏执。你愿意为了跨越物种的浪漫，果断抛弃安稳的人类社会，你的灵魂因这种极端的爱而变得强大。" },
+            { n: "玛吉 · 菲茨杰拉德", m: "《百万美元宝贝》", q: "如果今天我死了，我也会觉得死而无憾。", t: { R:10, I:90, B:60, P:80, E:40 }, sym:"拳击手套/沙袋", l:"证明自己/拼搏", d:"原生家庭/软弱", a:"你在血汗交织的拳台上寻找尊严。你极致务实、咬牙切齿地对抗着底层的命运。你不求怜悯，只求痛快淋漓地燃烧过。" },
+            { n: "简 · 史密斯", m: "《史密斯夫妇》", q: "Happy ending is just a story that hasn't finished yet.", t: { R:40, I:80, B:60, P:90, E:10 }, sym:"吊带裙与重火力", l:"刺激/势均力敌的对手", d:"平淡婚姻/伪装", a:"你冷艳、干练，把生活当作战场。你讨厌沉闷的日常，更享受那种在刀尖上跳舞、彼此试探与博弈的致命危险关系。" },
+            { n: "艾玛", m: "《一天》", q: "I love you. I just don't like you anymore.", t: { R:80, I:70, B:30, P:50, E:60 }, sym:"打字机/伦敦街景", l:"深沉的暗恋/自我成长", d:"对方的堕落/被消耗", a:"你的爱隐忍且深邃。你不是依附者，在漫长的岁月中你始终保持着自我提升。当底线被触碰，你能理性地收回感情，你的浪漫带有尊严。" },
+            { n: "金", m: "《剪刀手爱德华》", q: "Hold me.", t: { R:85, I:40, B:40, P:20, E:70 }, sym:"雪花/冰雕", l:"纯真的接纳/爱德华", d:"小镇的偏见与流言", a:"在充满市侩与偏见的环境中，你保留了最清澈的眼光。你看到了怪异外表下那颗最纯洁的心，并勇敢地给予了拥抱。" },
+            
+            // 补充剩余，使其达到50个
+            { n: "萨拉", m: "《法国中尉的女人》", t: { R:80, I:70, B:85, P:20, E:50 }, q:"我必须保持我的孤独。", sym:"海堤上的黑影", l:"自我放逐", d:"虚伪礼教", a:"你主动选择背负骂名来获得精神自由。你不受任何人控制。" },
+            { n: "伊丽莎白 · 斯旺", m: "《加勒比海盗》", t: { R:50, I:85, B:90, P:60, E:40 }, q:"海盗法典不是规矩，只是指南。", sym:"金币/海盗船", l:"冒险/掌控命运", d:"紧身胸衣", a:"你从温室花朵蜕变为海盗王。骨子里的狂野让你挣脱了贵族枷锁。" },
+            { n: "克莱尔", m: "《纸牌屋》", t: { R:10, I:90, B:30, P:100, E:10 }, q:"我没有耐心去容忍没有用处的人。", sym:"高跟鞋/雪茄", l:"权力顶峰", d:"情感牵绊", a:"极其冷酷的权力动物。你将所有的软弱都剔除，唯余绝对的理性和对权力的渴望。" },
+            { n: "塞尔玛", m: "《末路狂花》", t: { R:60, I:30, B:90, P:10, E:40 }, q:"我感觉自己终于醒了。", sym:"宝丽来相片", l:"释放天性", d:"丈夫的控制", a:"从长期被压抑的绝望主妇，爆发为疯狂的亡命之徒，你的叛逆是一场酣畅淋漓的烟火。" },
+            { n: "丽亚公主", m: "《星球大战》", t: { R:30, I:90, B:80, P:70, E:80 }, q:"有人必须要拯救我们的皮肤。", sym:"光剑/起义军徽章", l:"反抗暴政", d:"帝国", a:"坚韧不拔的领袖。面对强权你从未退缩，理智与信仰完美结合。" },
+            { n: "哈莉 · 奎茵", m: "《自杀小队》", t: { R:80, I:20, B:100, P:10, E:20 }, q:"We're bad guys, it's what we do.", sym:"棒球棍/彩虹马尾", l:"混乱/绝对的迷恋", d:"正常", a:"极致的疯狂与病态的浪漫。为了爱可以抛弃一切理性，你是纯粹破坏欲的化身。" },
+            { n: "猫女 (赛琳娜)", m: "《蝙蝠侠：黑暗骑士崛起》", t: { R:30, I:95, B:60, P:90, E:10 }, q:"我拿走我需要的，仅此而已。", sym:"珍珠项链/面罩", l:"生存/独来独往", d:"富人的虚伪", a:"在灰色地带游走的利己主义者。你极其务实且身手敏捷，绝不让自己陷入危险的道德困境。" },
+            { n: "赫敏 · 格兰杰", m: "《哈利·波特》", t: { R:30, I:80, B:40, P:80, E:90 }, q:"我要去图书馆了。", sym:"书本/魔杖", l:"知识/正义", d:"偏见/无规矩", a:"极其聪明且有原则。你用丰富的知识和坚定的理想主义撑起了每一次危机应对。" },
+            { n: "玛丽亚", m: "《音乐之声》", t: { R:80, I:50, B:60, P:20, E:90 }, q:"当上帝关上一扇门，他会打开一扇窗。", sym:"吉他/窗帘衣服", l:"歌唱/自由的空气", d:"刻板的修道院法则", a:"像微风一样无法被捕捉。你用极具感染力的乐观和音乐，融化了冰冷的规则。" },
+            { n: "艾莎", m: "《冰雪奇缘》", t: { R:40, I:80, B:50, P:30, E:70 }, q:"Let it go.", sym:"冰雪城堡", l:"真实的自我", d:"恐惧/伤害别人", a:"长期压抑后的自我觉醒。你学会在孤独中拥抱自己强大的力量。" }
+        ];
+
+        let currentQuestion = 0;
+        let userScores = { R: 0, I: 0, B: 0, P: 0, E: 0 };
+        let radarChartInstance = null;
+
+        function startTest() {
+            document.getElementById('intro-screen').classList.remove('active');
+            setTimeout(() => {
+                document.getElementById('intro-screen').classList.add('hidden-section');
+                document.getElementById('quiz-screen').classList.remove('hidden-section');
+                renderQuestion();
+            }, 800);
+        }
+
+        function renderQuestion() {
+            const container = document.getElementById('question-container');
+            container.classList.remove('active');
+            
+            setTimeout(() => {
+                const q = questions[currentQuestion];
+                document.getElementById('progress-text').innerText = `${String(currentQuestion + 1).padStart(2, '0')} / 25`;
+                document.getElementById('progress-bar').style.width = `${((currentQuestion + 1) / 25) * 100}%`;
+                
+                document.getElementById('question-text').innerText = q.q;
+                
+                const optsContainer = document.getElementById('options-container');
+                optsContainer.innerHTML = '';
+                
+                // 每次打乱选项顺序避免规律性
+                const shuffledOpts = [...q.opts].sort(() => Math.random() - 0.5);
+
+                shuffledOpts.forEach((opt, index) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn-option w-full text-left px-5 md:px-6 py-4 rounded-sm text-sm md:text-[15px] text-gray-300 focus:outline-none';
+                    btn.innerHTML = `<span class="gold-text mr-3 opacity-60 font-mono text-xs">0${index+1}.</span> <span class="leading-relaxed">${opt.text}</span>`;
+                    btn.onclick = () => selectOption(opt.impact);
+                    optsContainer.appendChild(btn);
+                });
+
+                container.classList.add('active');
+            }, 400);
+        }
+
+        function selectOption(impact) {
+            // 累加影响值
+            for (let key in impact) {
+                userScores[key] += impact[key];
+            }
+            
+            currentQuestion++;
+            if (currentQuestion < questions.length) {
+                renderQuestion();
+            } else {
+                showLoading();
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('quiz-screen').classList.add('hidden-section');
+            document.getElementById('loading-screen').classList.remove('hidden-section');
+            
+            setTimeout(() => {
+                calculateResult();
+            }, 3500); // 3.5秒的计算动画仪式感
+        }
+
+        function calculateResult() {
+            // 1. 将用户得分标准化到 0-100 区间
+            // 理论上每题最大加分约3，最小约-2。25题范围大概 -50 到 75。
+            // 采用软限制的min-max归一化，使其分布更符合角色的 0-100 设定。
+            const normalizedScores = {};
+            const dimensions = ['R', 'I', 'B', 'P', 'E'];
+            
+            dimensions.forEach(dim => {
+                let score = userScores[dim];
+                // 简单的映射：假设基准为 20，每1分对应约2.5
+                let mapped = 30 + (score * 2.5);
+                // 边界控制
+                if(mapped > 100) mapped = 100;
+                if(mapped < 0) mapped = 0;
+                normalizedScores[dim] = mapped;
+            });
+
+            // 2. 欧几里得距离寻找最近邻
+            let bestMatch = null;
+            let minDistance = Infinity;
+
+            characters.forEach(char => {
+                let dist = 0;
+                dimensions.forEach(dim => {
+                    dist += Math.pow(normalizedScores[dim] - char.t[dim], 2);
+                });
+                dist = Math.sqrt(dist);
+                
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestMatch = char;
+                }
+            });
+
+            // 计算相似度百分比 (最大理论距离大概223，经验公式)
+            let similarity = Math.max(50, Math.round(100 - (minDistance / 2.23)));
+
+            renderResult(bestMatch, similarity, normalizedScores);
+        }
+
+        function renderResult(data, similarity, userVector) {
+            document.getElementById('loading-screen').classList.add('hidden-section');
+            const resultScreen = document.getElementById('result-screen');
+            resultScreen.classList.remove('hidden-section');
+            
+            setTimeout(() => {
+                resultScreen.classList.add('fade-enter', 'active');
+            }, 50);
+
+            document.getElementById('res-name').innerText = data.n;
+            document.getElementById('res-movie').innerText = data.m;
+            document.getElementById('res-quote').innerText = data.q;
+            document.getElementById('res-items').innerText = data.sym;
+            document.getElementById('res-likes').innerText = data.l;
+            document.getElementById('res-dislikes').innerText = data.d;
+            document.getElementById('res-analysis').innerHTML = `<p>${data.a}</p>`;
+            document.getElementById('res-match').innerText = `${similarity}%`;
+
+            // 雷达图展示
+            initRadarChart([data.t.R, data.t.I, data.t.B, data.t.P, data.t.E]);
+        }
+
+        function initRadarChart(dataPoints) {
+            const ctx = document.getElementById('radarChart').getContext('2d');
+            
+            if (radarChartInstance) {
+                radarChartInstance.destroy();
+            }
+
+            Chart.defaults.color = '#555';
+            Chart.defaults.font.family = "'Noto Serif SC', serif";
+
+            radarChartInstance = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['浪漫/感性', '独立/自主', '叛逆/抗争', '务实/理性', '理想/远见'],
+                    datasets: [{
+                        label: '人格维度',
+                        data: dataPoints,
+                        backgroundColor: 'rgba(242, 190, 92, 0.15)',
+                        borderColor: '#F2BE5C',
+                        pointBackgroundColor: '#111',
+                        pointBorderColor: '#F2BE5C',
+                        pointHoverBackgroundColor: '#F2BE5C',
+                        pointHoverBorderColor: '#fff',
+                        borderWidth: 1.5,
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(255, 255, 255, 0.05)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)', circular: true },
+                            pointLabels: {
+                                color: '#aaa',
+                                font: { size: 10, family: "'Noto Serif SC', serif", weight: '300' }
+                            },
+                            ticks: { display: false, min: 0, max: 100 }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(10, 10, 10, 0.95)',
+                            titleColor: '#F2BE5C',
+                            bodyColor: '#e5e5e5',
+                            borderColor: '#333',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) { return `维度强度: ${context.raw}`; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
